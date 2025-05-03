@@ -1,0 +1,23 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-nurseapp-dev-44a00-authRole",
+      "UnauthRoleArn": "arn:aws:iam::522814720836:role/amplify-nurseapp-dev-44a00-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::522814720836:role/amplify-nurseapp-dev-44a00-authRole",
+      "Region": "us-east-2",
+      "DeploymentBucketName": "amplify-nurseapp-dev-44a00-deployment",
+      "UnauthRoleName": "amplify-nurseapp-dev-44a00-unauthRole",
+      "StackName": "amplify-nurseapp-dev-44a00",
+      "StackId": "arn:aws:cloudformation:us-east-2:522814720836:stack/amplify-nurseapp-dev-44a00/0ba2faf0-1a7d-11f0-8edf-0269456e2653",
+      "AmplifyAppId": "d3myn3yrhh9po3"
+    },
+    "categories": {
+      "auth": {
+        "nurseapp0873439f": {}
+      },
+      "api": {
+        "nurseapp": {}
+      }
+    }
+  }
+}

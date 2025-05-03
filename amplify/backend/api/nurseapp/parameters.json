@@ -1,0 +1,11 @@
+{
+  "AppSyncApiName": "nurseapp",
+  "DynamoDBBillingMode": "PAY_PER_REQUEST",
+  "DynamoDBEnableServerSideEncryption": false,
+  "AuthCognitoUserPoolId": {
+    "Fn::GetAtt": [
+      "authnurseapp0873439f",
+      "Outputs.UserPoolId"
+    ]
+  }
+}

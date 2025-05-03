@@ -58,6 +58,21 @@ const MainApp = () => {
               View System Architecture
             </Link>
           </div>
+          
+          {/* New Development Tools Section */}
+          <div className="bg-white p-6 rounded-lg shadow-md mt-6 border-2 border-dashed border-orange-300">
+            <h2 className="text-xl font-bold mb-4 flex items-center">
+              <span className="text-orange-500 mr-2">🔧</span>
+              Development Tools
+              <span className="text-orange-500 ml-2">🔧</span>
+            </h2>
+            <p className="text-sm text-orange-600 mb-4">
+              These tools are for development and testing purposes only.
+            </p>
+            <Link to="/test" className="block text-center bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded">
+              Test AWS Backend Integration
+            </Link>
+          </div>
         </div>
       </div>
     </div>

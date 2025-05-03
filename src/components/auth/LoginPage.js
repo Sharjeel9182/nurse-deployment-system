@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { signIn } from '@aws-amplify/auth';
 import { Link, useNavigate } from 'react-router-dom';
 
 const LoginPage = () => {
@@ -7,21 +8,30 @@ const LoginPage = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
+    setError('');
     
-    // Simple login logic for demo purposes
-    if (email === 'nurse@example.com' && password === 'password') {
-      // Redirect to nurse dashboard
-      navigate('/nurse-dashboard');
-    } else if (email === 'client@example.com' && password === 'password') {
-      // Redirect to client dashboard
-      navigate('/client-dashboard');
-    } else if (email === 'admin@example.com' && password === 'password') {
-      // Redirect to admin dashboard
-      navigate('/admin-dashboard');
-    } else {
-      setError('Invalid email or password');
+    try {
+      const user = await signIn({ username: email, password });
+      
+      // Get user attributes including custom attributes
+      const { attributes } = user;
+      const userRole = attributes['custom:role'] || 'client';
+      
+      // Navigate based on user role
+      if (userRole === 'nurse') {
+        navigate('/nurse-dashboard');
+      } else if (userRole === 'client') {
+        navigate('/client-dashboard');
+      } else if (userRole === 'admin') {
+        navigate('/admin-dashboard');
+      } else {
+        navigate('/');
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to sign in');
+      console.error('Auth error:', err);
     }
   };
 

@@ -1,62 +1,123 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { getUser, listAssignments } from '../../graphql/queries';
+import { updateAssignment } from '../../graphql/mutations';
+import { generateClient } from 'aws-amplify/api';
 
-// Mock data for a nurse
-const mockNurseData = {
-  id: 1,
-  name: 'Sarah Johnson',
-  email: 'nurse@example.com',
-  role: 'nurse',
-  verified: true,
-  license: 'RN123456',
-  specialization: 'ICU',
-  experience: '5 years',
-  availability: ['Monday', 'Wednesday', 'Friday']
-};
-
-// Mock assignments data
-const mockAssignments = [
-  {
-    id: 1,
-    client: 'City Hospital',
-    date: '2025-04-15',
-    shift: 'Morning (7am-3pm)',
-    status: 'Confirmed'
-  },
-  {
-    id: 2,
-    client: 'City Hospital',
-    date: '2025-04-20',
-    shift: 'Evening (3pm-11pm)',
-    status: 'Pending'
-  },
-  {
-    id: 3,
-    client: 'Sunshine Nursing Home',
-    date: '2025-04-25',
-    shift: 'Night (11pm-7am)',
-    status: 'Available'
-  }
-];
+// Create API client outside component
+const client = generateClient();
 
 const NurseDashboard = () => {
+  const { user, signOut } = useAuth();
   const [activeSection, setActiveSection] = useState('dashboard');
-  const [currentUser] = useState(mockNurseData);
-  const [assignments] = useState(mockAssignments);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchUserData();
+      fetchAssignments();
+    }
+  }, [user]);
+
+  async function fetchUserData() {
+    try {
+      // New pattern for querying
+      const userData = await client.graphql({
+        query: getUser,
+        variables: { id: user.username }
+      });
+      
+      setCurrentUser(userData.data.getUser);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  }
+
+  async function fetchAssignments() {
+    try {
+      // New pattern for querying with filters
+      const assignmentData = await client.graphql({
+        query: listAssignments,
+        variables: {
+          filter: { nurseId: { eq: user.username } }
+        }
+      });
+      
+      setAssignments(assignmentData.data.listAssignments.items);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching assignments:', error);
+      setLoading(false);
+    }
+  }
 
   const handleLogout = () => {
-    alert('Logout functionality would be implemented here');
+    signOut();
   };
 
-  const handleAcceptAssignment = (id) => {
-    alert(`Accept assignment ${id}`);
+  const handleAcceptAssignment = async (id) => {
+    try {
+      // New pattern for mutations
+      await client.graphql({
+        query: updateAssignment,
+        variables: {
+          input: {
+            id: id,
+            status: 'Confirmed',
+            nurseId: user.username
+          }
+        }
+      });
+      
+      // Refresh assignments
+      fetchAssignments();
+    } catch (error) {
+      console.error('Error accepting assignment:', error);
+    }
   };
 
-  const handleCancelAssignment = (id) => {
-    alert(`Cancel assignment ${id}`);
+  const handleCancelAssignment = async (id) => {
+    try {
+      // New pattern for mutations
+      await client.graphql({
+        query: updateAssignment,
+        variables: {
+          input: {
+            id: id,
+            status: 'Confirmed',
+            nurseId: user.username
+          }
+        }
+      });
+      
+      // Refresh assignments
+      fetchAssignments();
+    } catch (error) {
+      console.error('Error accepting assignment:', error);
+    }
   };
 
-  const handleViewAssignmentDetails = (id) => {
-    alert(`View details for assignment ${id}`);
+  const handleViewAssignmentDetails = async (id) => {
+    try {
+      // New pattern for mutations
+      await client.graphql({
+        query: updateAssignment,
+        variables: {
+          input: {
+            id: id,
+            status: 'Confirmed',
+            nurseId: user.username
+          }
+        }
+      });
+      
+      // Refresh assignments
+      fetchAssignments();
+    } catch (error) {
+      console.error('Error accepting assignment:', error);
+    }
   };
 
   return (
