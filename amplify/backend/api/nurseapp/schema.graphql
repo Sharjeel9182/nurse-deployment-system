@@ -1,0 +1,51 @@
+# This "input" configures a global authorization rule to enable public access to
+# all models in this schema. Learn more about authorization rules here: https://docs.amplify.aws/cli/graphql/authorization-rules
+input AMPLIFY { globalAuthRule: AuthRule = { allow: public } } # FOR TESTING ONLY!
+
+type User @model @auth(rules: [{ allow: owner, operations: [read, update] }, { allow: groups, groups: ["Admin"], operations: [read, create, update, delete] }]) {
+  id: ID!
+  name: String!
+  email: String!
+  role: String!
+  verified: Boolean
+  license: String
+  specialization: String
+  experience: String
+  facility_type: String
+  address: String
+  description: String
+  availability: [String]
+  createdAt: AWSDateTime
+}
+
+type Assignment @model @auth(rules: [
+  { allow: owner, ownerField: "clientId", operations: [read, create, update, delete] },
+  { allow: owner, ownerField: "nurseId", operations: [read, update] },
+  { allow: groups, groups: ["Admin"], operations: [read, create, update, delete] }
+]) {
+  id: ID!
+  clientId: ID!
+  client: User @hasOne(fields: ["clientId"])
+  nurseId: ID
+  nurse: User @hasOne(fields: ["nurseId"])
+  specialization: String!
+  date: AWSDate!
+  shift: String!
+  status: String!
+  createdAt: AWSDateTime
+}
+
+type Verification @model @auth(rules: [
+  { allow: owner, operations: [read] },
+  { allow: groups, groups: ["Admin"], operations: [read, update, delete] }
+]) {
+  id: ID!
+  userId: ID!
+  name: String!
+  role: String!
+  identifier: String!
+  submissionDate: AWSDate!
+  status: String!
+  reviewedBy: ID
+  reviewedAt: AWSDateTime
+}
