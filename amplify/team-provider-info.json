@@ -1,0 +1,34 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-nursestaffing-dev-dd071-authRole",
+      "UnauthRoleArn": "arn:aws:iam::522814720836:role/amplify-nursestaffing-dev-dd071-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::522814720836:role/amplify-nursestaffing-dev-dd071-authRole",
+      "Region": "us-east-2",
+      "DeploymentBucketName": "amplify-nursestaffing-dev-dd071-deployment",
+      "UnauthRoleName": "amplify-nursestaffing-dev-dd071-unauthRole",
+      "StackName": "amplify-nursestaffing-dev-dd071",
+      "StackId": "arn:aws:cloudformation:us-east-2:522814720836:stack/amplify-nursestaffing-dev-dd071/f05bfb50-2875-11f0-8002-0a5c4912dc6d",
+      "AmplifyAppId": "d18lpqyagn8cal",
+      "APIGatewayAuthURL": "https://s3.amazonaws.com/amplify-nursestaffing-dev-dd071-deployment/amplify-cfn-templates/api/APIGatewayAuthStack.json"
+    },
+    "categories": {
+      "function": {
+        "nurselambda": {
+          "deploymentBucketName": "amplify-nursestaffing-dev-dd071-deployment",
+          "s3Key": "amplify-builds/nurselambda-55423944746e78484361-build.zip"
+        }
+      },
+      "storage": {
+        "Users": {},
+        "Nursingdynamo": {}
+      },
+      "api": {
+        "nursestaffingapp": {}
+      },
+      "auth": {
+        "nursestaffing036a5e5a": {}
+      }
+    }
+  }
+}
