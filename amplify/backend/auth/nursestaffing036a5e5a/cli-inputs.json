@@ -1,10 +1,10 @@
 {
   "version": "1",
   "cognitoConfig": {
-    "identityPoolName": "nursestaffing_identitypool_c11eb2d5",
+    "identityPoolName": "nursestaffing036a5e5a_identitypool_036a5e5a",
     "allowUnauthenticatedIdentities": false,
-    "resourceNameTruncated": "nursesc11eb2d5",
-    "userPoolName": "nursestaffing_userpool_c11eb2d5",
+    "resourceNameTruncated": "nurses036a5e5a",
+    "userPoolName": "nursestaffing036a5e5a_userpool_036a5e5a",
     "autoVerifiedAttributes": [
       "email"
     ],
@@ -31,12 +31,18 @@
     "userpoolClientReadAttributes": [
       "email"
     ],
-    "userpoolClientLambdaRole": "nursesc11eb2d5_userpoolclient_lambda_role",
+    "userpoolClientLambdaRole": "nurses036a5e5a_userpoolclient_lambda_role",
     "userpoolClientSetAttributes": false,
+    "sharedId": "036a5e5a",
+    "resourceName": "nursestaffing036a5e5a",
     "authSelections": "identityPoolAndUserPool",
-    "resourceName": "nursestaffing",
-    "sharedId": "c11eb2d5",
+    "useDefault": "default",
+    "usernameAttributes": [
+      "email"
+    ],
+    "userPoolGroupList": [],
     "serviceName": "Cognito",
-    "useDefault": "manual"
+    "usernameCaseSensitive": false,
+    "useEnabledMfas": true
   }
 }

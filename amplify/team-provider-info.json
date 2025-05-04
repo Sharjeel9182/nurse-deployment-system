@@ -19,15 +19,15 @@
           "s3Key": "amplify-builds/nurselambda-55423944746e78484361-build.zip"
         }
       },
-      "auth": {
-        "nursestaffing": {}
-      },
       "storage": {
         "Users": {},
         "Nursingdynamo": {}
       },
       "api": {
         "nursestaffingapp": {}
+      },
+      "auth": {
+        "nursestaffing036a5e5a": {}
       }
     }
   }

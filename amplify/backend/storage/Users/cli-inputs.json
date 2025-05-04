@@ -6,5 +6,11 @@
     "fieldType": "string"
   },
   "gsi": [],
-  "triggerFunctions": []
+  "triggerFunctions": [],
+  "attributes": [
+    {
+      "fieldName": "role",
+      "fieldType": "string"
+    }
+  ]
 }
