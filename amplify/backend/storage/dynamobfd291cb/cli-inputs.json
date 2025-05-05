@@ -1,0 +1,10 @@
+{
+  "resourceName": "dynamobfd291cb",
+  "tableName": "Shifts",
+  "partitionKey": {
+    "fieldName": "ShiftId",
+    "fieldType": "string"
+  },
+  "gsi": [],
+  "triggerFunctions": []
+}

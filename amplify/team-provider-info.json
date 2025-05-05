@@ -17,17 +17,22 @@
         "nurselambda": {
           "deploymentBucketName": "amplify-nursestaffing-dev-dd071-deployment",
           "s3Key": "amplify-builds/nurselambda-55423944746e78484361-build.zip"
+        },
+        "nurseApiFunction": {
+          "deploymentBucketName": "amplify-nursestaffing-dev-dd071-deployment",
+          "s3Key": "amplify-builds/nurseApiFunction-6f4e49703435694c6831-build.zip"
         }
       },
       "storage": {
         "Users": {},
-        "Nursingdynamo": {}
-      },
-      "api": {
-        "nursestaffingapp": {}
+        "Nursingdynamo": {},
+        "dynamobfd291cb": {}
       },
       "auth": {
         "nursestaffing036a5e5a": {}
+      },
+      "api": {
+        "nursestaffing": {}
       }
     }
   }
