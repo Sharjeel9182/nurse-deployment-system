@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { generateClient } from 'aws-amplify/api';
+import { listShifts } from '../../graphql/queries'; // Assuming generated queries are here
+import { updateShift } from '../../graphql/mutations'; // Assuming generated mutations are here
+
+const client = generateClient();
 
 // Mock data for a nurse
 const mockNurseData = {
-  id: 1,
+  id: "nurse-placeholder-id", // Replace with actual ID post-auth
   name: 'Sarah Johnson',
   email: 'nurse@example.com',
   role: 'nurse',
@@ -13,42 +18,79 @@ const mockNurseData = {
   availability: ['Monday', 'Wednesday', 'Friday']
 };
 
-// Mock assignments data
-const mockAssignments = [
-  {
-    id: 1,
-    client: 'City Hospital',
-    date: '2025-04-15',
-    shift: 'Morning (7am-3pm)',
-    status: 'Confirmed'
-  },
-  {
-    id: 2,
-    client: 'City Hospital',
-    date: '2025-04-20',
-    shift: 'Evening (3pm-11pm)',
-    status: 'Pending'
-  },
-  {
-    id: 3,
-    client: 'Sunshine Nursing Home',
-    date: '2025-04-25',
-    shift: 'Night (11pm-7am)',
-    status: 'Available'
-  }
-];
-
 const NurseDashboard = () => {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [currentUser] = useState(mockNurseData);
-  const [assignments] = useState(mockAssignments);
+  const [availableShifts, setAvailableShifts] = useState([]);
+  const [myShifts, setMyShifts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Wrap fetchAllShifts in useCallback to stabilize its identity
+  const fetchAllShifts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch OPEN shifts
+      const openShiftsData = await client.graphql({
+        query: listShifts,
+        variables: { filter: { status: { eq: "OPEN" } } }
+      });
+      setAvailableShifts(openShiftsData.data.listShifts.items);
+
+      // Fetch shifts assigned to current nurse (using placeholder ID)
+      // TODO: Replace currentUser.id with actual authenticated user ID
+      const myShiftsData = await client.graphql({
+        query: listShifts,
+        variables: { filter: { nurseId: { eq: currentUser.id } } }
+      });
+      setMyShifts(myShiftsData.data.listShifts.items);
+
+    } catch (err) {
+      console.error('Error fetching shifts:', err);
+      setError('Error fetching shifts. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser.id]); // Dependency: fetch needs re-running if the user ID changes
+
+  // Fetch shifts on component mount
+  useEffect(() => {
+    fetchAllShifts();
+  }, [fetchAllShifts]); // Now depends on the memoized callback
 
   const handleLogout = () => {
     alert('Logout functionality would be implemented here');
   };
 
-  const handleAcceptAssignment = (id) => {
-    alert(`Accept assignment ${id}`);
+  const handleAcceptAssignment = async (shift) => {
+    if (!shift || !shift.id) return;
+    if (!currentUser || !currentUser.id) {
+      alert("Nurse information missing. Cannot accept shift.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    const input = {
+      id: shift.id,
+      status: 'ASSIGNED',
+      nurseId: currentUser.id,
+    };
+
+    try {
+      await client.graphql({
+        query: updateShift,
+        variables: { input }
+      });
+      alert(`Shift accepted: ${shift.id} for ${shift.clientName || 'client'} on ${shift.date}`);
+      fetchAllShifts();
+    } catch (err) {
+      console.error('Error accepting shift:', err);
+      setError(`Error accepting shift ${shift.id}. Please try again.`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancelAssignment = (id) => {
@@ -136,26 +178,30 @@ const NurseDashboard = () => {
         
         {/* Main content */}
         <div className="flex-1 p-6">
-          {activeSection === 'dashboard' && (
+          {/* Loading and Error Display */}
+          {loading && <p className="text-center text-gray-500">Loading...</p>}
+          {error && <p className="text-center text-red-500">{error}</p>}
+
+          {activeSection === 'dashboard' && !loading && !error && (
             <div>
               <h2 className="text-xl font-bold mb-4">Dashboard</h2>
               
               <div className="grid grid-cols-3 gap-4 mb-6">
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                   <div className="text-sm text-blue-500 font-medium">Upcoming Shifts</div>
-                  <div className="text-2xl font-bold">{assignments.filter(a => a.status !== 'Completed').length}</div>
+                  <div className="text-2xl font-bold">{myShifts.filter(s => s.status === 'ASSIGNED' && new Date(s.date) >= new Date()).length}</div>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg border border-green-100">
                   <div className="text-sm text-green-500 font-medium">Hours This Month</div>
-                  <div className="text-2xl font-bold">42</div>
+                  <div className="text-2xl font-bold">--</div>
                 </div>
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
                   <div className="text-sm text-purple-500 font-medium">Available Requests</div>
-                  <div className="text-2xl font-bold">12</div>
+                  <div className="text-2xl font-bold">{availableShifts.length}</div>
                 </div>
               </div>
               
-              <h3 className="font-bold text-lg mb-2">Upcoming Assignments</h3>
+              <h3 className="font-bold text-lg mb-2">Available Shifts</h3>
               <div className="bg-white rounded-lg border overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -178,75 +224,43 @@ const NurseDashboard = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {assignments.length > 0 ? (
-                      assignments.map(assignment => (
-                        <tr key={assignment.id}>
+                    {availableShifts.length > 0 ? (
+                      availableShifts.map(shift => (
+                        <tr key={shift.id}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {assignment.client}
+                            {shift.clientName || 'N/A'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {assignment.date}
+                            {shift.date}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {assignment.shift}
+                            {shift.startTime} - {shift.endTime}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                              ${assignment.status === 'Confirmed' ? 'bg-green-100 text-green-800' : 
-                                assignment.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                'bg-blue-100 text-blue-800'}`}>
-                              {assignment.status}
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800`}>
+                              {shift.status}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {assignment.status === 'Available' ? (
-                              <button 
-                                className="text-blue-600 hover:text-blue-900"
-                                onClick={() => handleAcceptAssignment(assignment.id)}
-                              >
-                                Accept
-                              </button>
-                            ) : assignment.status === 'Pending' ? (
-                              <button 
-                                className="text-red-600 hover:text-red-900"
-                                onClick={() => handleCancelAssignment(assignment.id)}
-                              >
-                                Cancel
-                              </button>
-                            ) : (
-                              <button 
-                                className="text-blue-600 hover:text-blue-900"
-                                onClick={() => handleViewAssignmentDetails(assignment.id)}
-                              >
-                                Details
-                              </button>
-                            )}
+                            <button
+                              className="text-blue-600 hover:text-blue-900"
+                              onClick={() => handleAcceptAssignment(shift)}
+                              disabled={loading}
+                            >
+                              Accept
+                            </button>
                           </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
                         <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
-                          No assignments found
+                          No available shifts found
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
-              </div>
-              
-              <h3 className="font-bold text-lg mt-6 mb-2">Upcoming Shifts</h3>
-              <div className="bg-white rounded-lg border p-4">
-                <p className="text-gray-500">No shifts scheduled for today.</p>
-                <button 
-                  className="mt-2 text-blue-600 hover:text-blue-900 text-sm font-medium flex items-center"
-                  onClick={() => setActiveSection('assignments')}
-                >
-                  View all schedules
-                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                  </svg>
-                </button>
               </div>
             </div>
           )}
@@ -293,10 +307,9 @@ const NurseDashboard = () => {
             </div>
           )}
           
-          {activeSection === 'assignments' && (
+          {activeSection === 'assignments' && !loading && !error && (
             <div>
               <h2 className="text-xl font-bold mb-4">My Assignments</h2>
-              <p className="text-gray-600 mb-4">View and manage all your scheduled assignments.</p>
               <div className="bg-white rounded-lg border overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -319,35 +332,51 @@ const NurseDashboard = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {assignments.map(assignment => (
-                      <tr key={assignment.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {assignment.client}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {assignment.date}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {assignment.shift}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            ${assignment.status === 'Confirmed' ? 'bg-green-100 text-green-800' : 
-                              assignment.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 
-                              'bg-blue-100 text-blue-800'}`}>
-                            {assignment.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <button 
-                            className="text-blue-600 hover:text-blue-900"
-                            onClick={() => handleViewAssignmentDetails(assignment.id)}
-                          >
-                            View Details
-                          </button>
+                    {myShifts.length > 0 ? (
+                      myShifts.map(shift => (
+                        <tr key={shift.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {shift.clientName || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {shift.date}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {shift.startTime} - {shift.endTime}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                              ${shift.status === 'ASSIGNED' ? 'bg-green-100 text-green-800' :
+                                shift.status === 'COMPLETED' ? 'bg-gray-100 text-gray-800' :
+                                'bg-yellow-100 text-yellow-800'}`}>
+                              {shift.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {shift.status === 'ASSIGNED' && (
+                              <button
+                                className="text-red-600 hover:text-red-900 mr-2"
+                                onClick={() => handleCancelAssignment(shift.id)}
+                              >
+                                Cancel
+                              </button>
+                            )}
+                            <button
+                              className="text-blue-600 hover:text-blue-900"
+                              onClick={() => handleViewAssignmentDetails(shift.id)}
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
+                          You have no assigned shifts.
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
