@@ -1,33 +1,38 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { generateClient } from 'aws-amplify/api';
-import { listShifts } from '../../graphql/queries'; // Assuming generated queries are here
-import { updateShift } from '../../graphql/mutations'; // Assuming generated mutations are here
+import { listShifts } from '../../graphql/queries';
+import { updateShift } from '../../graphql/mutations';
+import { useAuth } from '../../contexts/AuthContext';
 
 const client = generateClient();
 
-// Mock data for a nurse
-const mockNurseData = {
-  id: "nurse-placeholder-id", // Replace with actual ID post-auth
-  name: 'Sarah Johnson',
-  email: 'nurse@example.com',
-  role: 'nurse',
-  verified: true,
-  license: 'RN123456',
-  specialization: 'ICU',
-  experience: '5 years',
-  availability: ['Monday', 'Wednesday', 'Friday']
-};
-
 const NurseDashboard = () => {
+  const { user, loading: authLoading } = useAuth();
   const [activeSection, setActiveSection] = useState('dashboard');
-  const [currentUser] = useState(mockNurseData);
   const [availableShifts, setAvailableShifts] = useState([]);
   const [myShifts, setMyShifts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Get user attributes with fallbacks
+  const nurseData = {
+    id: user?.username || user?.sub || '', // Using Cognito-generated ID (like 017b5560-80e1-705e...)
+    name: user?.name || user?.email?.split('@')[0] || 'User',
+    email: user?.email || '',
+    role: user?.['custom:role'] || 'nurse',
+    verified: user?.email_verified || false,
+    license: user?.['custom:license'] || 'N/A',
+    specialization: user?.['custom:specialization'] || 'N/A',
+    experience: user?.['custom:experience'] || 'N/A',
+    availability: user?.['custom:availability']?.split(',') || []
+  };
+
   // Wrap fetchAllShifts in useCallback to stabilize its identity
   const fetchAllShifts = useCallback(async () => {
+    if (!nurseData.id) {
+      console.log("User ID not available yet");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -38,11 +43,10 @@ const NurseDashboard = () => {
       });
       setAvailableShifts(openShiftsData.data.listShifts.items);
 
-      // Fetch shifts assigned to current nurse (using placeholder ID)
-      // TODO: Replace currentUser.id with actual authenticated user ID
+      // Fetch shifts assigned to current nurse using Cognito user ID
       const myShiftsData = await client.graphql({
         query: listShifts,
-        variables: { filter: { nurseId: { eq: currentUser.id } } }
+        variables: { filter: { nurseId: { eq: nurseData.id } } }
       });
       setMyShifts(myShiftsData.data.listShifts.items);
 
@@ -52,12 +56,25 @@ const NurseDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentUser.id]); // Dependency: fetch needs re-running if the user ID changes
+  }, [nurseData.id]);
 
-  // Fetch shifts on component mount
+  // Add debug logging to help verify the data
   useEffect(() => {
-    fetchAllShifts();
-  }, [fetchAllShifts]); // Now depends on the memoized callback
+    if (user) {
+      console.log('Nurse Data:', {
+        userId: user.username || user.sub, // Log the actual Cognito ID being used
+        nurseData,
+        rawUser: user
+      });
+    }
+  }, [user, nurseData]);
+
+  // Fetch shifts on component mount and when user changes
+  useEffect(() => {
+    if (!authLoading && nurseData.id) {
+      fetchAllShifts();
+    }
+  }, [authLoading, nurseData.id, fetchAllShifts]);
 
   const handleLogout = () => {
     alert('Logout functionality would be implemented here');
@@ -65,7 +82,7 @@ const NurseDashboard = () => {
 
   const handleAcceptAssignment = async (shift) => {
     if (!shift || !shift.id) return;
-    if (!currentUser || !currentUser.id) {
+    if (!nurseData.id) {
       alert("Nurse information missing. Cannot accept shift.");
       return;
     }
@@ -75,7 +92,7 @@ const NurseDashboard = () => {
     const input = {
       id: shift.id,
       status: 'ASSIGNED',
-      nurseId: currentUser.id,
+      nurseId: nurseData.id,
     };
 
     try {
@@ -101,12 +118,30 @@ const NurseDashboard = () => {
     alert(`View details for assignment ${id}`);
   };
 
+  // Show loading state while auth is loading
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <p className="text-gray-500">Loading user information...</p>
+      </div>
+    );
+  }
+
+  // Show error state if no user data
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <p className="text-red-500">Please log in to access the nurse dashboard.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="bg-blue-500 p-4 flex justify-between items-center">
         <h1 className="text-white text-xl font-bold">Nurse Portal</h1>
         <div className="flex items-center">
-          <span className="text-white mr-4">Welcome, {currentUser.name}</span>
+          <span className="text-white mr-4">Welcome, {nurseData.name}</span>
           <button
             onClick={handleLogout}
             className="bg-white text-blue-500 px-4 py-1 rounded-lg text-sm"
@@ -121,7 +156,7 @@ const NurseDashboard = () => {
           <div className="mb-4">
             <div className="font-bold text-gray-700">Verification Status</div>
             <div className="mt-1 flex items-center">
-              {currentUser.verified ? 
+              {nurseData.verified ? 
                 <span className="text-green-500 flex items-center">
                   <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
@@ -135,9 +170,9 @@ const NurseDashboard = () => {
           <div className="mb-4">
             <div className="font-bold text-gray-700">My Information</div>
             <div className="mt-1 text-sm">
-              <div><span className="font-medium">License:</span> {currentUser.license}</div>
-              <div><span className="font-medium">Specialization:</span> {currentUser.specialization}</div>
-              <div><span className="font-medium">Experience:</span> {currentUser.experience}</div>
+              <div><span className="font-medium">License:</span> {nurseData.license}</div>
+              <div><span className="font-medium">Specialization:</span> {nurseData.specialization}</div>
+              <div><span className="font-medium">Experience:</span> {nurseData.experience}</div>
             </div>
           </div>
           <ul className="space-y-2">
@@ -272,12 +307,12 @@ const NurseDashboard = () => {
                 <div className="mb-4">
                   <h3 className="font-medium mb-2">Current Availability</h3>
                   <div className="flex flex-wrap gap-2">
-                    {currentUser.availability && currentUser.availability.map(day => (
+                    {nurseData.availability && nurseData.availability.map(day => (
                       <span key={day} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
                         {day}
                       </span>
                     ))}
-                    {(!currentUser.availability || currentUser.availability.length === 0) && (
+                    {(!nurseData.availability || nurseData.availability.length === 0) && (
                       <p className="text-gray-500 text-sm">No availability set</p>
                     )}
                   </div>
@@ -290,7 +325,7 @@ const NurseDashboard = () => {
                       <label key={day} className="flex items-center space-x-2 border p-2 rounded">
                         <input 
                           type="checkbox" 
-                          defaultChecked={currentUser.availability.includes(day)}
+                          defaultChecked={nurseData.availability.includes(day)}
                           className="h-4 w-4"
                         />
                         <span className="text-sm">{day}</span>
@@ -394,7 +429,7 @@ const NurseDashboard = () => {
                   <input
                     type="text"
                     className="w-full p-2 border rounded"
-                    defaultValue={currentUser.name}
+                    defaultValue={nurseData.name}
                     required
                   />
                 </div>
@@ -405,7 +440,7 @@ const NurseDashboard = () => {
                   <input
                     type="email"
                     className="w-full p-2 border rounded"
-                    defaultValue={currentUser.email}
+                    defaultValue={nurseData.email}
                     required
                   />
                 </div>
@@ -416,7 +451,7 @@ const NurseDashboard = () => {
                   <input
                     type="text"
                     className="w-full p-2 border rounded"
-                    defaultValue={currentUser.specialization}
+                    defaultValue={nurseData.specialization}
                   />
                 </div>
                 <div>
@@ -426,7 +461,7 @@ const NurseDashboard = () => {
                   <input
                     type="text"
                     className="w-full p-2 border rounded"
-                    defaultValue={currentUser.experience}
+                    defaultValue={nurseData.experience}
                   />
                 </div>
                 <div>
@@ -437,7 +472,7 @@ const NurseDashboard = () => {
                     type="text"
                     readOnly
                     className="w-full p-2 border rounded bg-gray-100"
-                    value={currentUser.license || ''}
+                    value={nurseData.license || ''}
                   />
                   <p className="text-sm text-gray-500 mt-1">License information can only be changed by administrators.</p>
                 </div>

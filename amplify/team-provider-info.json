@@ -9,8 +9,7 @@
       "UnauthRoleName": "amplify-nursestaffing-dev-dd071-unauthRole",
       "StackName": "amplify-nursestaffing-dev-dd071",
       "StackId": "arn:aws:cloudformation:us-east-2:522814720836:stack/amplify-nursestaffing-dev-dd071/f05bfb50-2875-11f0-8002-0a5c4912dc6d",
-      "AmplifyAppId": "d18lpqyagn8cal",
-      "APIGatewayAuthURL": "https://s3.amazonaws.com/amplify-nursestaffing-dev-dd071-deployment/amplify-cfn-templates/api/APIGatewayAuthStack.json"
+      "AmplifyAppId": "d18lpqyagn8cal"
     },
     "categories": {
       "function": {
