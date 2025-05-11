@@ -1,54 +1,113 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { generateClient } from 'aws-amplify/api';
+import { listShifts } from '../../graphql/queries';
+import { updateShift } from '../../graphql/mutations';
+import { useAuth } from '../../contexts/AuthContext';
 
-// Mock data for a nurse
-const mockNurseData = {
-  id: 1,
-  name: 'Sarah Johnson',
-  email: 'nurse@example.com',
-  role: 'nurse',
-  verified: true,
-  license: 'RN123456',
-  specialization: 'ICU',
-  experience: '5 years',
-  availability: ['Monday', 'Wednesday', 'Friday']
-};
-
-// Mock assignments data
-const mockAssignments = [
-  {
-    id: 1,
-    client: 'City Hospital',
-    date: '2025-04-15',
-    shift: 'Morning (7am-3pm)',
-    status: 'Confirmed'
-  },
-  {
-    id: 2,
-    client: 'City Hospital',
-    date: '2025-04-20',
-    shift: 'Evening (3pm-11pm)',
-    status: 'Pending'
-  },
-  {
-    id: 3,
-    client: 'Sunshine Nursing Home',
-    date: '2025-04-25',
-    shift: 'Night (11pm-7am)',
-    status: 'Available'
-  }
-];
+const client = generateClient();
 
 const NurseDashboard = () => {
+  const { user, loading: authLoading } = useAuth();
   const [activeSection, setActiveSection] = useState('dashboard');
-  const [currentUser] = useState(mockNurseData);
-  const [assignments] = useState(mockAssignments);
+  const [availableShifts, setAvailableShifts] = useState([]);
+  const [myShifts, setMyShifts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Get user attributes with fallbacks
+  const nurseData = {
+    id: user?.username || user?.sub || '', // Using Cognito-generated ID (like 017b5560-80e1-705e...)
+    name: user?.name || user?.email?.split('@')[0] || 'User',
+    email: user?.email || '',
+    role: user?.['custom:role'] || 'nurse',
+    verified: user?.email_verified || false,
+    license: user?.['custom:license'] || 'N/A',
+    specialization: user?.['custom:specialization'] || 'N/A',
+    experience: user?.['custom:experience'] || 'N/A',
+    availability: user?.['custom:availability']?.split(',') || []
+  };
+
+  // Wrap fetchAllShifts in useCallback to stabilize its identity
+  const fetchAllShifts = useCallback(async () => {
+    if (!nurseData.id) {
+      console.log("User ID not available yet");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch OPEN shifts
+      const openShiftsData = await client.graphql({
+        query: listShifts,
+        variables: { filter: { status: { eq: "OPEN" } } }
+      });
+      setAvailableShifts(openShiftsData.data.listShifts.items);
+
+      // Fetch shifts assigned to current nurse using Cognito user ID
+      const myShiftsData = await client.graphql({
+        query: listShifts,
+        variables: { filter: { nurseId: { eq: nurseData.id } } }
+      });
+      setMyShifts(myShiftsData.data.listShifts.items);
+
+    } catch (err) {
+      console.error('Error fetching shifts:', err);
+      setError('Error fetching shifts. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [nurseData.id]);
+
+  // Add debug logging to help verify the data
+  useEffect(() => {
+    if (user) {
+      console.log('Nurse Data:', {
+        userId: user.username || user.sub, // Log the actual Cognito ID being used
+        nurseData,
+        rawUser: user
+      });
+    }
+  }, [user, nurseData]);
+
+  // Fetch shifts on component mount and when user changes
+  useEffect(() => {
+    if (!authLoading && nurseData.id) {
+      fetchAllShifts();
+    }
+  }, [authLoading, nurseData.id, fetchAllShifts]);
 
   const handleLogout = () => {
     alert('Logout functionality would be implemented here');
   };
 
-  const handleAcceptAssignment = (id) => {
-    alert(`Accept assignment ${id}`);
+  const handleAcceptAssignment = async (shift) => {
+    if (!shift || !shift.id) return;
+    if (!nurseData.id) {
+      alert("Nurse information missing. Cannot accept shift.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    const input = {
+      id: shift.id,
+      status: 'ASSIGNED',
+      nurseId: nurseData.id,
+    };
+
+    try {
+      await client.graphql({
+        query: updateShift,
+        variables: { input }
+      });
+      alert(`Shift accepted: ${shift.id} for ${shift.clientName || 'client'} on ${shift.date}`);
+      fetchAllShifts();
+    } catch (err) {
+      console.error('Error accepting shift:', err);
+      setError(`Error accepting shift ${shift.id}. Please try again.`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancelAssignment = (id) => {
@@ -59,12 +118,30 @@ const NurseDashboard = () => {
     alert(`View details for assignment ${id}`);
   };
 
+  // Show loading state while auth is loading
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <p className="text-gray-500">Loading user information...</p>
+      </div>
+    );
+  }
+
+  // Show error state if no user data
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <p className="text-red-500">Please log in to access the nurse dashboard.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="bg-blue-500 p-4 flex justify-between items-center">
         <h1 className="text-white text-xl font-bold">Nurse Portal</h1>
         <div className="flex items-center">
-          <span className="text-white mr-4">Welcome, {currentUser.name}</span>
+          <span className="text-white mr-4">Welcome, {nurseData.name}</span>
           <button
             onClick={handleLogout}
             className="bg-white text-blue-500 px-4 py-1 rounded-lg text-sm"
@@ -79,7 +156,7 @@ const NurseDashboard = () => {
           <div className="mb-4">
             <div className="font-bold text-gray-700">Verification Status</div>
             <div className="mt-1 flex items-center">
-              {currentUser.verified ? 
+              {nurseData.verified ? 
                 <span className="text-green-500 flex items-center">
                   <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
@@ -93,9 +170,9 @@ const NurseDashboard = () => {
           <div className="mb-4">
             <div className="font-bold text-gray-700">My Information</div>
             <div className="mt-1 text-sm">
-              <div><span className="font-medium">License:</span> {currentUser.license}</div>
-              <div><span className="font-medium">Specialization:</span> {currentUser.specialization}</div>
-              <div><span className="font-medium">Experience:</span> {currentUser.experience}</div>
+              <div><span className="font-medium">License:</span> {nurseData.license}</div>
+              <div><span className="font-medium">Specialization:</span> {nurseData.specialization}</div>
+              <div><span className="font-medium">Experience:</span> {nurseData.experience}</div>
             </div>
           </div>
           <ul className="space-y-2">
@@ -136,26 +213,30 @@ const NurseDashboard = () => {
         
         {/* Main content */}
         <div className="flex-1 p-6">
-          {activeSection === 'dashboard' && (
+          {/* Loading and Error Display */}
+          {loading && <p className="text-center text-gray-500">Loading...</p>}
+          {error && <p className="text-center text-red-500">{error}</p>}
+
+          {activeSection === 'dashboard' && !loading && !error && (
             <div>
               <h2 className="text-xl font-bold mb-4">Dashboard</h2>
               
               <div className="grid grid-cols-3 gap-4 mb-6">
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                   <div className="text-sm text-blue-500 font-medium">Upcoming Shifts</div>
-                  <div className="text-2xl font-bold">{assignments.filter(a => a.status !== 'Completed').length}</div>
+                  <div className="text-2xl font-bold">{myShifts.filter(s => s.status === 'ASSIGNED' && new Date(s.date) >= new Date()).length}</div>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg border border-green-100">
                   <div className="text-sm text-green-500 font-medium">Hours This Month</div>
-                  <div className="text-2xl font-bold">42</div>
+                  <div className="text-2xl font-bold">--</div>
                 </div>
                 <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
                   <div className="text-sm text-purple-500 font-medium">Available Requests</div>
-                  <div className="text-2xl font-bold">12</div>
+                  <div className="text-2xl font-bold">{availableShifts.length}</div>
                 </div>
               </div>
               
-              <h3 className="font-bold text-lg mb-2">Upcoming Assignments</h3>
+              <h3 className="font-bold text-lg mb-2">Available Shifts</h3>
               <div className="bg-white rounded-lg border overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -178,75 +259,43 @@ const NurseDashboard = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {assignments.length > 0 ? (
-                      assignments.map(assignment => (
-                        <tr key={assignment.id}>
+                    {availableShifts.length > 0 ? (
+                      availableShifts.map(shift => (
+                        <tr key={shift.id}>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {assignment.client}
+                            {shift.clientName || 'N/A'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {assignment.date}
+                            {shift.date}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {assignment.shift}
+                            {shift.startTime} - {shift.endTime}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                              ${assignment.status === 'Confirmed' ? 'bg-green-100 text-green-800' : 
-                                assignment.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                'bg-blue-100 text-blue-800'}`}>
-                              {assignment.status}
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800`}>
+                              {shift.status}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {assignment.status === 'Available' ? (
-                              <button 
-                                className="text-blue-600 hover:text-blue-900"
-                                onClick={() => handleAcceptAssignment(assignment.id)}
-                              >
-                                Accept
-                              </button>
-                            ) : assignment.status === 'Pending' ? (
-                              <button 
-                                className="text-red-600 hover:text-red-900"
-                                onClick={() => handleCancelAssignment(assignment.id)}
-                              >
-                                Cancel
-                              </button>
-                            ) : (
-                              <button 
-                                className="text-blue-600 hover:text-blue-900"
-                                onClick={() => handleViewAssignmentDetails(assignment.id)}
-                              >
-                                Details
-                              </button>
-                            )}
+                            <button
+                              className="text-blue-600 hover:text-blue-900"
+                              onClick={() => handleAcceptAssignment(shift)}
+                              disabled={loading}
+                            >
+                              Accept
+                            </button>
                           </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
                         <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
-                          No assignments found
+                          No available shifts found
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
-              </div>
-              
-              <h3 className="font-bold text-lg mt-6 mb-2">Upcoming Shifts</h3>
-              <div className="bg-white rounded-lg border p-4">
-                <p className="text-gray-500">No shifts scheduled for today.</p>
-                <button 
-                  className="mt-2 text-blue-600 hover:text-blue-900 text-sm font-medium flex items-center"
-                  onClick={() => setActiveSection('assignments')}
-                >
-                  View all schedules
-                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-                  </svg>
-                </button>
               </div>
             </div>
           )}
@@ -258,12 +307,12 @@ const NurseDashboard = () => {
                 <div className="mb-4">
                   <h3 className="font-medium mb-2">Current Availability</h3>
                   <div className="flex flex-wrap gap-2">
-                    {currentUser.availability && currentUser.availability.map(day => (
+                    {nurseData.availability && nurseData.availability.map(day => (
                       <span key={day} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
                         {day}
                       </span>
                     ))}
-                    {(!currentUser.availability || currentUser.availability.length === 0) && (
+                    {(!nurseData.availability || nurseData.availability.length === 0) && (
                       <p className="text-gray-500 text-sm">No availability set</p>
                     )}
                   </div>
@@ -276,7 +325,7 @@ const NurseDashboard = () => {
                       <label key={day} className="flex items-center space-x-2 border p-2 rounded">
                         <input 
                           type="checkbox" 
-                          defaultChecked={currentUser.availability.includes(day)}
+                          defaultChecked={nurseData.availability.includes(day)}
                           className="h-4 w-4"
                         />
                         <span className="text-sm">{day}</span>
@@ -293,10 +342,9 @@ const NurseDashboard = () => {
             </div>
           )}
           
-          {activeSection === 'assignments' && (
+          {activeSection === 'assignments' && !loading && !error && (
             <div>
               <h2 className="text-xl font-bold mb-4">My Assignments</h2>
-              <p className="text-gray-600 mb-4">View and manage all your scheduled assignments.</p>
               <div className="bg-white rounded-lg border overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -319,35 +367,51 @@ const NurseDashboard = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {assignments.map(assignment => (
-                      <tr key={assignment.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {assignment.client}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {assignment.date}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {assignment.shift}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            ${assignment.status === 'Confirmed' ? 'bg-green-100 text-green-800' : 
-                              assignment.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 
-                              'bg-blue-100 text-blue-800'}`}>
-                            {assignment.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <button 
-                            className="text-blue-600 hover:text-blue-900"
-                            onClick={() => handleViewAssignmentDetails(assignment.id)}
-                          >
-                            View Details
-                          </button>
+                    {myShifts.length > 0 ? (
+                      myShifts.map(shift => (
+                        <tr key={shift.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {shift.clientName || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {shift.date}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {shift.startTime} - {shift.endTime}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                              ${shift.status === 'ASSIGNED' ? 'bg-green-100 text-green-800' :
+                                shift.status === 'COMPLETED' ? 'bg-gray-100 text-gray-800' :
+                                'bg-yellow-100 text-yellow-800'}`}>
+                              {shift.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {shift.status === 'ASSIGNED' && (
+                              <button
+                                className="text-red-600 hover:text-red-900 mr-2"
+                                onClick={() => handleCancelAssignment(shift.id)}
+                              >
+                                Cancel
+                              </button>
+                            )}
+                            <button
+                              className="text-blue-600 hover:text-blue-900"
+                              onClick={() => handleViewAssignmentDetails(shift.id)}
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">
+                          You have no assigned shifts.
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -365,7 +429,7 @@ const NurseDashboard = () => {
                   <input
                     type="text"
                     className="w-full p-2 border rounded"
-                    defaultValue={currentUser.name}
+                    defaultValue={nurseData.name}
                     required
                   />
                 </div>
@@ -376,7 +440,7 @@ const NurseDashboard = () => {
                   <input
                     type="email"
                     className="w-full p-2 border rounded"
-                    defaultValue={currentUser.email}
+                    defaultValue={nurseData.email}
                     required
                   />
                 </div>
@@ -387,7 +451,7 @@ const NurseDashboard = () => {
                   <input
                     type="text"
                     className="w-full p-2 border rounded"
-                    defaultValue={currentUser.specialization}
+                    defaultValue={nurseData.specialization}
                   />
                 </div>
                 <div>
@@ -397,7 +461,7 @@ const NurseDashboard = () => {
                   <input
                     type="text"
                     className="w-full p-2 border rounded"
-                    defaultValue={currentUser.experience}
+                    defaultValue={nurseData.experience}
                   />
                 </div>
                 <div>
@@ -408,7 +472,7 @@ const NurseDashboard = () => {
                     type="text"
                     readOnly
                     className="w-full p-2 border rounded bg-gray-100"
-                    value={currentUser.license || ''}
+                    value={nurseData.license || ''}
                   />
                   <p className="text-sm text-gray-500 mt-1">License information can only be changed by administrators.</p>
                 </div>
