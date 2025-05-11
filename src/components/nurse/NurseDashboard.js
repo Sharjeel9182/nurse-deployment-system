@@ -3,6 +3,7 @@ import { generateClient } from 'aws-amplify/api';
 import { listShifts } from '../../graphql/queries';
 import { updateShift } from '../../graphql/mutations';
 import { useAuth } from '../../contexts/AuthContext';
+import { uploadData } from '@aws-amplify/storage';
 
 const client = generateClient();
 
@@ -13,6 +14,7 @@ const NurseDashboard = () => {
   const [myShifts, setMyShifts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState({});
 
   // Get user attributes with fallbacks
   const nurseData = {
@@ -24,7 +26,50 @@ const NurseDashboard = () => {
     license: user?.['custom:license'] || 'N/A',
     specialization: user?.['custom:specialization'] || 'N/A',
     experience: user?.['custom:experience'] || 'N/A',
-    availability: user?.['custom:availability']?.split(',') || []
+    availability: user?.['custom:availability']?.split(',') || [],
+    gender: user?.['custom:gender'] || '',
+    provinces: user?.['custom:provinces']?.split(',') || []
+  };
+
+  // Canadian provinces list
+  const canadianProvinces = [
+    'Alberta',
+    'British Columbia',
+    'Manitoba',
+    'New Brunswick',
+    'Newfoundland and Labrador',
+    'Nova Scotia',
+    'Ontario',
+    'Prince Edward Island',
+    'Quebec',
+    'Saskatchewan',
+    'Northwest Territories',
+    'Nunavut',
+    'Yukon'
+  ];
+
+  // Handle file upload
+  const handleFileUpload = async (event, documentType) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setUploadStatus(prev => ({ ...prev, [documentType]: 'uploading' }));
+    try {
+      // The file will be stored in a folder structure like: documents/userId/documentType/filename
+      const fileName = `${documentType}_${Date.now()}_${file.name}`;
+      const result = await uploadData({
+        key: `documents/${nurseData.id}/${documentType}/${fileName}`,
+        data: file,
+        options: {
+          contentType: file.type
+        }
+      });
+      setUploadStatus(prev => ({ ...prev, [documentType]: 'success' }));
+      console.log('Upload success:', result);
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploadStatus(prev => ({ ...prev, [documentType]: 'error' }));
+    }
   };
 
   // Wrap fetchAllShifts in useCallback to stabilize its identity
@@ -444,6 +489,43 @@ const NurseDashboard = () => {
                     required
                   />
                 </div>
+
+                {/* Gender Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Gender
+                  </label>
+                  <select
+                    className="w-full p-2 border rounded"
+                    defaultValue={nurseData.gender}
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                    <option value="prefer_not_to_say">Prefer not to say</option>
+                  </select>
+                </div>
+
+                {/* Canadian Provinces */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Licensed Provinces
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    {canadianProvinces.map(province => (
+                      <label key={province} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          defaultChecked={nurseData.provinces.includes(province)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">{province}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Specialization
@@ -454,6 +536,7 @@ const NurseDashboard = () => {
                     defaultValue={nurseData.specialization}
                   />
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Years of Experience
@@ -464,19 +547,198 @@ const NurseDashboard = () => {
                     defaultValue={nurseData.experience}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    License Number
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    className="w-full p-2 border rounded bg-gray-100"
-                    value={nurseData.license || ''}
-                  />
-                  <p className="text-sm text-gray-500 mt-1">License information can only be changed by administrators.</p>
+
+                {/* Document Upload Section */}
+                <div className="space-y-4">
+                  <h3 className="font-medium text-gray-900">Required Documents</h3>
+                  
+                  {/* License Upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nursing License
+                    </label>
+                    <div className="mt-1 flex items-center">
+                      <input
+                        type="file"
+                        onChange={(e) => handleFileUpload(e, 'license')}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="block w-full text-sm text-gray-500
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-md file:border-0
+                          file:text-sm file:font-semibold
+                          file:bg-blue-50 file:text-blue-700
+                          hover:file:bg-blue-100"
+                      />
+                      {uploadStatus.license && (
+                        <span className={`ml-2 text-sm ${
+                          uploadStatus.license === 'success' ? 'text-green-600' :
+                          uploadStatus.license === 'error' ? 'text-red-600' :
+                          'text-gray-600'
+                        }`}>
+                          {uploadStatus.license === 'uploading' ? 'Uploading...' :
+                           uploadStatus.license === 'success' ? 'Uploaded' :
+                           'Error'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* First Aid Certification */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      First Aid Certification
+                    </label>
+                    <div className="mt-1 flex items-center">
+                      <input
+                        type="file"
+                        onChange={(e) => handleFileUpload(e, 'firstAid')}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="block w-full text-sm text-gray-500
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-md file:border-0
+                          file:text-sm file:font-semibold
+                          file:bg-blue-50 file:text-blue-700
+                          hover:file:bg-blue-100"
+                      />
+                      {uploadStatus.firstAid && (
+                        <span className={`ml-2 text-sm ${
+                          uploadStatus.firstAid === 'success' ? 'text-green-600' :
+                          uploadStatus.firstAid === 'error' ? 'text-red-600' :
+                          'text-gray-600'
+                        }`}>
+                          {uploadStatus.firstAid === 'uploading' ? 'Uploading...' :
+                           uploadStatus.firstAid === 'success' ? 'Uploaded' :
+                           'Error'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* TB Test */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      TB Test Results
+                    </label>
+                    <div className="mt-1 flex items-center">
+                      <input
+                        type="file"
+                        onChange={(e) => handleFileUpload(e, 'tbTest')}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="block w-full text-sm text-gray-500
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-md file:border-0
+                          file:text-sm file:font-semibold
+                          file:bg-blue-50 file:text-blue-700
+                          hover:file:bg-blue-100"
+                      />
+                      {uploadStatus.tbTest && (
+                        <span className={`ml-2 text-sm ${
+                          uploadStatus.tbTest === 'success' ? 'text-green-600' :
+                          uploadStatus.tbTest === 'error' ? 'text-red-600' :
+                          'text-gray-600'
+                        }`}>
+                          {uploadStatus.tbTest === 'uploading' ? 'Uploading...' :
+                           uploadStatus.tbTest === 'success' ? 'Uploaded' :
+                           'Error'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Background Check */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Background Check
+                    </label>
+                    <div className="mt-1 flex items-center">
+                      <input
+                        type="file"
+                        onChange={(e) => handleFileUpload(e, 'backgroundCheck')}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="block w-full text-sm text-gray-500
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-md file:border-0
+                          file:text-sm file:font-semibold
+                          file:bg-blue-50 file:text-blue-700
+                          hover:file:bg-blue-100"
+                      />
+                      {uploadStatus.backgroundCheck && (
+                        <span className={`ml-2 text-sm ${
+                          uploadStatus.backgroundCheck === 'success' ? 'text-green-600' :
+                          uploadStatus.backgroundCheck === 'error' ? 'text-red-600' :
+                          'text-gray-600'
+                        }`}>
+                          {uploadStatus.backgroundCheck === 'uploading' ? 'Uploading...' :
+                           uploadStatus.backgroundCheck === 'success' ? 'Uploaded' :
+                           'Error'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Resume */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Resume
+                    </label>
+                    <div className="mt-1 flex items-center">
+                      <input
+                        type="file"
+                        onChange={(e) => handleFileUpload(e, 'resume')}
+                        accept=".pdf,.doc,.docx"
+                        className="block w-full text-sm text-gray-500
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-md file:border-0
+                          file:text-sm file:font-semibold
+                          file:bg-blue-50 file:text-blue-700
+                          hover:file:bg-blue-100"
+                      />
+                      {uploadStatus.resume && (
+                        <span className={`ml-2 text-sm ${
+                          uploadStatus.resume === 'success' ? 'text-green-600' :
+                          uploadStatus.resume === 'error' ? 'text-red-600' :
+                          'text-gray-600'
+                        }`}>
+                          {uploadStatus.resume === 'uploading' ? 'Uploading...' :
+                           uploadStatus.resume === 'success' ? 'Uploaded' :
+                           'Error'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* COVID Certificate */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      COVID-19 Vaccination Certificate
+                    </label>
+                    <div className="mt-1 flex items-center">
+                      <input
+                        type="file"
+                        onChange={(e) => handleFileUpload(e, 'covidCert')}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="block w-full text-sm text-gray-500
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-md file:border-0
+                          file:text-sm file:font-semibold
+                          file:bg-blue-50 file:text-blue-700
+                          hover:file:bg-blue-100"
+                      />
+                      {uploadStatus.covidCert && (
+                        <span className={`ml-2 text-sm ${
+                          uploadStatus.covidCert === 'success' ? 'text-green-600' :
+                          uploadStatus.covidCert === 'error' ? 'text-red-600' :
+                          'text-gray-600'
+                        }`}>
+                          {uploadStatus.covidCert === 'uploading' ? 'Uploading...' :
+                           uploadStatus.covidCert === 'success' ? 'Uploaded' :
+                           'Error'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                
+
                 <button 
                   type="submit" 
                   className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
